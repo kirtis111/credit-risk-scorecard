@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Data (never commit raw/processed data to GitHub)
+data/raw/
+data/processed/
+*.csv
+*.parquet
+*.feather
+
+# Models (use DVC or MLflow for model versioning)
+models/*.pkl
+models/*.json
+models/*.joblib
+
+# Reports output (generated artifacts)
+reports/output/
+*.pdf
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+*.ipynb
+
+# Secrets / credentials
+.env
+*.env
+config/secrets.yaml
+kaggle.json
+
+# Excel outputs
+excel/*.xlsx
+*.xlsx
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+logs/

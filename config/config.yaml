@@ -1,0 +1,113 @@
+# ============================================================
+# BFSI Credit Risk Scorecard — Configuration
+# Mirrors configuration files used at RBC/TD/BMO model teams
+# ============================================================
+
+project:
+  name: "Canadian BFSI Credit Risk Scorecard"
+  version: "1.0.0"
+  regulatory_framework: "OSFI E-23 / IFRS 9 / Basel III AIRB"
+  currency: "CAD"
+
+data:
+  raw_path: "data/raw/hmeq.csv"
+  processed_path: "data/processed/"
+  target_column: "BAD"
+  test_size: 0.20
+  validation_size: 0.10
+  random_state: 42
+  date_column: null  # No date in HMEQ; use synthetic for monitoring
+
+feature_engineering:
+  missing_threshold: 0.60          # Drop features > 60% missing
+  near_zero_variance_threshold: 0.01
+  correlation_threshold: 0.85      # Remove one of highly correlated pair
+  iv_minimum: 0.02                 # Minimum IV to retain feature
+  iv_strong: 0.30                  # IV > 0.3 = strong predictive power
+  woe_bins_min: 3
+  woe_bins_max: 10
+  monotonicity_check: true         # Enforce WoE monotonicity for scorecard
+
+scorecard:
+  base_score: 600                  # Score at average odds (Canadian standard)
+  base_odds: 50                    # Odds at base score (50:1 good:bad)
+  pdo: 20                          # Points to double the odds
+  min_score: 300
+  max_score: 850
+  decision_thresholds:
+    decline: 580
+    refer: 620
+    approve: 660
+
+logistic_regression:
+  solver: "lbfgs"
+  max_iter: 1000
+  C: 1.0                           # Regularization (tuned via CV)
+  class_weight: "balanced"         # Handle class imbalance
+  calibration_method: "isotonic"   # Platt scaling for PD calibration
+
+xgboost:
+  n_estimators: 500
+  max_depth: 4
+  learning_rate: 0.05
+  subsample: 0.8
+  colsample_bytree: 0.8
+  min_child_weight: 5
+  scale_pos_weight: 4.5            # Ratio of negatives to positives
+  eval_metric: "auc"
+  early_stopping_rounds: 50
+  random_state: 42
+
+lgd:
+  method: "beta_regression"        # Beta regression for LGD estimation
+  collateral_haircut:
+    residential_mortgage: 0.20
+    home_equity: 0.25
+    unsecured: 0.00
+  recovery_period_years: 3
+
+ead:
+  ccf_method: "historical"         # Credit Conversion Factor approach
+  revolving_ccf: 0.75
+  term_ccf: 1.00
+
+ifrs9:
+  staging_thresholds:
+    stage1_max_pd: 0.03            # 12-month PD < 3%
+    stage2_max_pd: 0.20            # Lifetime PD 3–20% 
+    stage3_min_pd: 0.20            # Lifetime PD > 20% (credit-impaired)
+  discount_rate: 0.065             # BoC overnight rate + spread
+  lgd_downturn_scalar: 1.25        # Downturn LGD = LGD × scalar (OSFI)
+  macro_scenarios:
+    base_case_weight: 0.50
+    optimistic_weight: 0.25
+    adverse_weight: 0.25
+  forward_looking_horizon: 12      # Months for Stage 1
+
+model_validation:
+  gini_minimum: 0.40
+  ks_minimum: 0.30
+  auc_minimum: 0.70
+  psi_amber: 0.10                  # PSI 0.10–0.25 = amber flag
+  psi_red: 0.25                    # PSI > 0.25 = model rebuild required
+  csi_amber: 0.10
+  csi_red: 0.25
+  bins_ks: 10
+  bootstrap_samples: 1000
+
+monitoring:
+  psi_monitoring_frequency: "monthly"
+  csi_monitoring_frequency: "monthly"
+  backtesting_window_months: 12
+  traffic_light:
+    green: "Model performing within acceptable bounds"
+    amber: "Monitor closely — degradation detected"
+    red: "Model rebuild required — escalate to CRO"
+
+reporting:
+  output_dir: "reports/output/"
+  pdf_filename: "Model_Validation_Report_IFRS9.pdf"
+  excel_filename: "Scorecard_Cards_v1.xlsx"
+  author: "Credit Risk Analytics Team"
+  reviewer: "Model Risk Management"
+  institution: "Canadian Financial Institution"

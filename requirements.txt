@@ -1,0 +1,49 @@
+# ============================================================
+# BFSI Credit Risk Scorecard — Canadian Banking Edition
+# requirements.txt
+# ============================================================
+
+# Core Data Science
+numpy==1.26.4
+pandas==2.2.1
+scipy==1.13.0
+
+# Machine Learning
+scikit-learn==1.4.2
+xgboost==2.0.3
+optuna==3.6.1
+imbalanced-learn==0.12.2
+
+# Explainability
+shap==0.45.0
+
+# Visualisation
+matplotlib==3.8.4
+seaborn==0.13.2
+plotly==5.21.0
+
+# Streamlit Dashboard
+streamlit==1.34.0
+streamlit-option-menu==0.3.12
+streamlit-aggrid==1.0.5
+
+# Excel / Reporting
+openpyxl==3.1.2
+xlsxwriter==3.2.0
+reportlab==4.2.0
+Pillow==10.3.0
+
+# Database
+sqlalchemy==2.0.30
+psycopg2-binary==2.9.9
+
+# Utilities
+pyyaml==6.0.1
+joblib==1.4.2
+tqdm==4.66.4
+python-dotenv==1.0.1
+
+# Jupyter
+jupyterlab==4.2.0
+nbformat==5.10.4
+ipywidgets==8.1.2
