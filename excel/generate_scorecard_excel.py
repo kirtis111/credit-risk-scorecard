@@ -2,7 +2,6 @@
 generate_scorecard_excel.py
 ────────────────────────────
 Exports the credit risk scorecard to a professionally formatted Excel workbook.
-Mirrors the Excel scorecard deliverables produced at Canadian banks.
 
 Sheets:
   1. Scorecard Points  — Bin-level point allocation table
@@ -492,7 +491,7 @@ def build_excel_workbook(output_path: str = "excel/Scorecard_v1.0.xlsx",
     write_monitoring_sheet(wb)
 
     wb.save(output_path)
-    print(f"✅ Excel workbook saved: {output_path}")
+    print(f" Excel workbook saved: {output_path}")
     print(f"   Sheets: {[s.title for s in wb.worksheets]}")
     return output_path
 

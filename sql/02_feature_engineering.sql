@@ -1,7 +1,6 @@
 -- ============================================================
 -- 02_feature_engineering.sql
 -- SQL-Based Feature Engineering for Credit Risk Model
--- Mirrors Teradata/Snowflake patterns at Canadian banks
 -- ============================================================
 
 -- ─────────────────────────────────────────────

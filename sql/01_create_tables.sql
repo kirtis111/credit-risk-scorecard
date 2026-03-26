@@ -2,7 +2,6 @@
 -- 01_create_tables.sql
 -- Credit Risk Feature Store Schema
 -- Canadian BFSI — OSFI E-23 / IFRS 9 Aligned
--- Mirrors feature store designs at RBC, TD, BMO
 -- ============================================================
 
 -- ─────────────────────────────────────────────

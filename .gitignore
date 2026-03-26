@@ -26,7 +26,6 @@ reports/output/
 
 # Jupyter checkpoints
 .ipynb_checkpoints/
-*.ipynb
 
 # Secrets / credentials
 .env

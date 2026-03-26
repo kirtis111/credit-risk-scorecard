@@ -1,216 +1,219 @@
 """
-02_Portfolio_Monitoring.py
-──────────────────────────
-Model performance monitoring dashboard.
-PSI, CSI, AUC decay, score distributions — OSFI E-23 aligned.
-Mirrors the MRM monitoring dashboards at Canadian Schedule I banks.
+Portfolio Monitoring — Model Performance Tracking
+Monthly PSI, AUC decay, score distribution. OSFI E-23 aligned.
 """
+
 import streamlit as st
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-from scipy.stats import gaussian_kde
 from sklearn.metrics import roc_auc_score, roc_curve
 
-st.set_page_config(page_title="Portfolio Monitoring | CreditIQ", page_icon="📊", layout="wide")
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-* { font-family:'Inter',sans-serif; }
-[data-testid="stSidebar"] { background:linear-gradient(180deg,#003366,#1a3a5c); }
-[data-testid="stSidebar"] * { color:#fff !important; }
-h1,h2 { color:#003366 !important; }
-[data-testid="metric-container"] { background:white; border:1px solid #e0e7ff;
-    border-radius:10px; padding:12px; box-shadow:0 2px 8px rgba(0,51,102,0.08); }
-[data-testid="metric-container"] [data-testid="stMetricValue"] {
-    font-size:1.5rem !important; font-weight:700 !important; color:#003366 !important; }
-</style>""", unsafe_allow_html=True)
+st.set_page_config(page_title="Portfolio Monitoring", page_icon="📈", layout="wide")
+
+st.title("Portfolio Monitoring")
+st.caption("Monthly model performance | OSFI E-23 | PSI thresholds: Amber > 0.10 | Red > 0.25")
 
 
-# ── Synthetic monitoring data (replace with model.predict in production) ──
+# ── Generate 12 months of synthetic monitoring data ────────────────────────
 @st.cache_data
-def generate_monitoring_data():
+def build_monitoring_data():
     np.random.seed(42)
-    n = 5960
-
-    # Development population
-    dev_scores  = np.random.normal(635, 68, n).clip(300, 850)
-    dev_pd      = 1 / (1 + np.exp((dev_scores - 600) / 28.85))
-    dev_bad     = (np.random.rand(n) < dev_pd).astype(int)
-
-    # Monthly monitoring slices (12 months — gradual drift)
-    months, mon_data = pd.date_range("2024-01-01", periods=12, freq="MS"), []
+    months = pd.date_range("2024-01-01", periods=12, freq="MS")
+    rows   = []
     for i, mo in enumerate(months):
-        drift = i * 1.8
-        mn   = np.random.normal(635 - drift, 68 + drift * 0.3, 450).clip(300, 850)
-        mpd  = 1 / (1 + np.exp((mn - 600) / 28.85))
-        mbad = (np.random.rand(450) < mpd).astype(int)
+        drift      = i * 1.6
+        n          = 420 + i * 8
+        scores_dev = np.random.normal(638, 67, 4000).clip(300, 850)
+        scores_mon = np.random.normal(638 - drift, 67 + drift * 0.25, n).clip(300, 850)
+        pds        = 1 / (1 + np.exp((scores_mon - 600) / 28.85))
+        bads       = (np.random.rand(n) < pds).astype(int)
+
         try:
-            auc = roc_auc_score(mbad, mpd)
+            auc = roc_auc_score(bads, pds) if bads.sum() > 0 else 0.80
         except Exception:
-            auc = 0.78
-        mon_data.append(dict(
-            month=mo, n=450,
-            mean_score=mn.mean(), std_score=mn.std(),
-            default_rate=mbad.mean(), expected_pd=mpd.mean(),
-            auc_roc=auc, gini=2*auc-1,
-            psi=i * 0.012 + np.random.uniform(0, 0.008),
-            scores=mn, pds=mpd, bads=mbad
-        ))
+            auc = 0.80
 
-    return dict(dev_scores=dev_scores, dev_pd=dev_pd, dev_bad=dev_bad,
-                mon_data=mon_data, months=months)
+        psi = float(i * 0.011 + np.random.uniform(0, 0.007))
+
+        rows.append({
+            "Month":        mo,
+            "Period":       mo.strftime("%b %Y"),
+            "N":            n,
+            "Mean_Score":   round(float(scores_mon.mean()), 1),
+            "Default_Rate": round(float(bads.mean() * 100), 2),
+            "Exp_PD":       round(float(pds.mean() * 100), 2),
+            "AUC":          round(auc, 4),
+            "Gini":         round(2 * auc - 1, 4),
+            "PSI":          round(psi, 4),
+            "scores_dev":   scores_dev,
+            "scores_mon":   scores_mon,
+            "bads":         bads,
+            "pds":          pds,
+        })
+    return rows
 
 
-data = generate_monitoring_data()
-mon  = data["mon_data"]
-months_labels = [m["month"].strftime("%b %Y") for m in mon]
+data  = build_monitoring_data()
+months_labels = [r["Period"] for r in data]
 
-# ── Sidebar controls ──────────────────────────────────────────
-with st.sidebar:
-    st.markdown("## 📊 Monitoring Controls")
-    st.divider()
-    sel_month = st.selectbox("Monitoring Period", months_labels, index=len(months_labels)-1)
-    model_ver = st.selectbox("Model Version", ["v1.0 — Champion (LR)", "v1.0 — Challenger (XGB)"])
-    st.divider()
-    st.markdown("**Thresholds**")
-    psi_amber = st.slider("PSI Amber", 0.05, 0.20, 0.10, 0.01)
-    psi_red   = st.slider("PSI Red",   0.10, 0.40, 0.25, 0.01)
-    st.divider()
-    st.markdown("**Export**")
-    if st.button("📥 Download Monitoring Report", use_container_width=True):
-        st.info("In production: generates PDF/Excel report")
 
-sel_idx = months_labels.index(sel_month)
-cur     = mon[sel_idx]
+# ── Sidebar controls ───────────────────────────────────────────────────────
+st.sidebar.header("Controls")
+sel_period = st.sidebar.selectbox("Monitoring Period", months_labels, index=len(months_labels) - 1)
+psi_amber  = st.sidebar.number_input("PSI Amber threshold", 0.05, 0.20, 0.10, 0.01)
+psi_red    = st.sidebar.number_input("PSI Red threshold",   0.10, 0.40, 0.25, 0.01)
 
-# ── Header ────────────────────────────────────────────────────
-st.markdown("# 📊 Portfolio Monitoring Dashboard")
-st.caption(f"OSFI E-23 Monthly Model Monitoring | Period: {sel_month} | Model: {model_ver}")
+sel_idx = months_labels.index(sel_period)
+cur     = data[sel_idx]
+dev     = data[0]  # development period
 
-# ── KPI Cards ─────────────────────────────────────────────────
-psi_now = cur["psi"]
-rag = "🟢 Green" if psi_now < psi_amber else ("🟡 Amber" if psi_now < psi_red else "🔴 Red")
-c1,c2,c3,c4,c5,c6 = st.columns(6)
-c1.metric("AUC-ROC",      f"{cur['auc_roc']:.4f}", f"{cur['auc_roc']-mon[0]['auc_roc']:+.4f}")
-c2.metric("Gini",         f"{cur['gini']:.4f}",    f"{cur['gini']-mon[0]['gini']:+.4f}")
-c3.metric("Mean Score",   f"{cur['mean_score']:.0f}", f"{cur['mean_score']-mon[0]['mean_score']:+.0f}")
-c4.metric("Default Rate", f"{cur['default_rate']*100:.2f}%")
-c5.metric("PSI",          f"{psi_now:.4f}",         rag)
-c6.metric("Population N", f"{cur['n']:,}")
+
+# ── RAG helper ─────────────────────────────────────────────────────────────
+def rag(psi_val):
+    if psi_val < psi_amber:  return "🟢 Green"
+    if psi_val < psi_red:    return "🟡 Amber"
+    return "🔴 Red"
+
+def auc_rag(auc_val):
+    if auc_val >= 0.75:  return "🟢"
+    if auc_val >= 0.70:  return "🟡"
+    return "🔴"
+
+
+# ── KPIs ───────────────────────────────────────────────────────────────────
+st.subheader(f"Period: {sel_period}")
+
+c1, c2, c3, c4, c5 = st.columns(5)
+c1.metric("AUC-ROC",      f"{cur['AUC']:.4f}",
+          delta=f"{cur['AUC'] - dev['AUC']:+.4f} vs dev")
+c2.metric("Gini",         f"{cur['Gini']:.4f}",
+          delta=f"{cur['Gini'] - dev['Gini']:+.4f} vs dev")
+c3.metric("Mean Score",   f"{cur['Mean_Score']:.0f}",
+          delta=f"{cur['Mean_Score'] - dev['Mean_Score']:+.0f} vs dev")
+c4.metric("Default Rate", f"{cur['Default_Rate']:.2f}%")
+c5.metric("PSI",          f"{cur['PSI']:.4f}",  help=rag(cur["PSI"]))
 
 st.divider()
 
-# ── Row 1: AUC Decay + PSI Chart ──────────────────────────────
-col_auc, col_psi = st.columns(2)
+# ── Charts ─────────────────────────────────────────────────────────────────
+col_left, col_right = st.columns(2)
 
-with col_auc:
-    st.markdown("### 📈 AUC-ROC Over Time")
+with col_left:
+    st.subheader("AUC-ROC — Monthly Trend")
+    aucs    = [r["AUC"] for r in data]
+    periods = [r["Period"] for r in data]
+
     fig, ax = plt.subplots(figsize=(7, 3.8))
-    aucs   = [m["auc_roc"] for m in mon]
-    colors = ["#dc2626" if a < 0.70 else "#d97706" if a < 0.75 else "#16a34a" for a in aucs]
-    ax.bar(range(len(mon)), aucs, color=colors, edgecolor="white", width=0.7)
-    ax.axhline(0.75, color="#d97706", ls="--", lw=1.5, label="Amber threshold (0.75)")
-    ax.axhline(0.70, color="#dc2626", ls="--", lw=1.5, label="Red threshold (0.70)")
-    ax.axvline(sel_idx, color="#003366", ls="-", lw=2, alpha=0.6, label="Selected period")
-    ax.set_xticks(range(len(mon))); ax.set_xticklabels(months_labels, rotation=45, fontsize=7)
-    ax.set_ylabel("AUC-ROC"); ax.set_ylim(0.60, 0.95)
-    ax.set_title("AUC-ROC Monthly Trend", fontweight="bold")
-    ax.legend(fontsize=7); ax.grid(axis="y", alpha=0.3)
-    st.pyplot(fig, use_container_width=True); plt.close("all")
+    bar_colours = ["#ef4444" if a < 0.70 else "#f97316" if a < 0.75 else "#22c55e"
+                   for a in aucs]
+    ax.bar(range(len(data)), aucs, color=bar_colours, edgecolor="white", width=0.7)
+    ax.axhline(0.75, color="orange", ls="--", lw=1.2, label="Amber (0.75)")
+    ax.axhline(0.70, color="red",    ls="--", lw=1.2, label="Red (0.70)")
+    ax.axvline(sel_idx, color="navy", lw=1.8, alpha=0.6, label=f"Selected: {sel_period}")
+    ax.set_xticks(range(len(data)))
+    ax.set_xticklabels(periods, rotation=45, fontsize=7)
+    ax.set_ylabel("AUC-ROC")
+    ax.set_ylim(0.55, 0.95)
+    ax.legend(fontsize=7)
+    ax.grid(axis="y", alpha=0.3)
+    ax.set_title("AUC-ROC Monthly Trend", fontsize=10)
+    plt.tight_layout()
+    st.pyplot(fig, use_container_width=True)
+    plt.close()
 
-with col_psi:
-    st.markdown("### 📉 PSI — Population Stability Index")
+with col_right:
+    st.subheader("PSI — Score Distribution Stability")
+    psis = [r["PSI"] for r in data]
+
     fig, ax = plt.subplots(figsize=(7, 3.8))
-    psis   = [m["psi"] for m in mon]
-    pcolors= ["#dc2626" if p >= psi_red else "#d97706" if p >= psi_amber else "#16a34a" for p in psis]
-    bars   = ax.bar(range(len(mon)), psis, color=pcolors, edgecolor="white", width=0.7)
-    ax.axhline(psi_amber, color="#d97706", ls="--", lw=1.5, label=f"Amber ({psi_amber:.2f})")
-    ax.axhline(psi_red,   color="#dc2626", ls="--", lw=1.5, label=f"Red ({psi_red:.2f})")
-    ax.axvline(sel_idx, color="#003366", ls="-", lw=2, alpha=0.6)
-    for bar, val in zip(bars, psis):
-        ax.text(bar.get_x()+bar.get_width()/2, bar.get_height()+0.003,
-                f"{val:.3f}", ha="center", fontsize=6.5)
-    ax.set_xticks(range(len(mon))); ax.set_xticklabels(months_labels, rotation=45, fontsize=7)
-    ax.set_ylabel("PSI"); ax.set_title("PSI Monthly Trend — Score Distribution Stability", fontweight="bold")
-    ax.legend(fontsize=7); ax.grid(axis="y", alpha=0.3)
-    st.pyplot(fig, use_container_width=True); plt.close("all")
+    bar_colours = [
+        "#ef4444" if p >= psi_red else "#f97316" if p >= psi_amber else "#22c55e"
+        for p in psis
+    ]
+    bars = ax.bar(range(len(data)), psis, color=bar_colours, edgecolor="white", width=0.7)
+    ax.axhline(psi_amber, color="orange", ls="--", lw=1.2, label=f"Amber ({psi_amber:.2f})")
+    ax.axhline(psi_red,   color="red",    ls="--", lw=1.2, label=f"Red ({psi_red:.2f})")
+    ax.axvline(sel_idx, color="navy", lw=1.8, alpha=0.6)
+    for bar, v in zip(bars, psis):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.003,
+                f"{v:.3f}", ha="center", fontsize=6.5)
+    ax.set_xticks(range(len(data)))
+    ax.set_xticklabels(periods, rotation=45, fontsize=7)
+    ax.set_ylabel("PSI")
+    ax.legend(fontsize=7)
+    ax.grid(axis="y", alpha=0.3)
+    ax.set_title("PSI Monthly Trend", fontsize=10)
+    plt.tight_layout()
+    st.pyplot(fig, use_container_width=True)
+    plt.close()
 
-# ── Row 2: Score Dist + ROC Curve ─────────────────────────────
-col_sd, col_roc = st.columns(2)
+st.divider()
 
-with col_sd:
-    st.markdown("### 🎯 Score Distribution — Dev vs Monitor")
+col_left2, col_right2 = st.columns(2)
+
+with col_left2:
+    st.subheader("Score Distribution — Dev vs Monitor")
     fig, ax = plt.subplots(figsize=(7, 3.8))
-    dev_s = data["dev_scores"]
-    cur_s = cur["scores"]
-    ax.hist(dev_s, bins=40, alpha=0.55, color="#003366", density=True, label="Development", edgecolor="white")
-    ax.hist(cur_s, bins=40, alpha=0.55, color="#f97316", density=True, label=f"Monitor ({sel_month})", edgecolor="white")
-    for arr, col in [(dev_s,"#003366"),(cur_s,"#f97316")]:
-        if len(arr) > 1:
-            kde = gaussian_kde(arr)
-            xs  = np.linspace(300, 850, 400)
-            ax.plot(xs, kde(xs), color=col, lw=2)
-    ax.axvline(580, color="red",  ls="--", lw=1, alpha=0.7, label="Decline threshold (580)")
-    ax.axvline(660, color="green",ls="--", lw=1, alpha=0.7, label="Approve threshold (660)")
-    ax.set_xlabel("Credit Score"); ax.set_ylabel("Density")
-    ax.set_title("Score Distribution Shift", fontweight="bold")
-    ax.legend(fontsize=7); ax.grid(alpha=0.3)
-    st.pyplot(fig, use_container_width=True); plt.close("all")
+    ax.hist(cur["scores_dev"], bins=40, alpha=0.55, color="steelblue",
+            density=True, label="Development", edgecolor="white")
+    ax.hist(cur["scores_mon"], bins=40, alpha=0.55, color="darkorange",
+            density=True, label=f"{sel_period}", edgecolor="white")
+    ax.axvline(580, color="red",   ls="--", lw=1, label="Decline (580)")
+    ax.axvline(660, color="green", ls="--", lw=1, label="Approve (660)")
+    ax.set_xlabel("Credit Score")
+    ax.set_ylabel("Density")
+    ax.legend(fontsize=8)
+    ax.grid(alpha=0.3)
+    ax.set_title("Score Distribution Shift", fontsize=10)
+    plt.tight_layout()
+    st.pyplot(fig, use_container_width=True)
+    plt.close()
 
-with col_roc:
-    st.markdown("### 📐 ROC Curve — Current Period")
+with col_right2:
+    st.subheader("ROC Curve — Current Period vs Development")
     fig, ax = plt.subplots(figsize=(7, 3.8))
-    dev_b  = data["dev_bad"]; dev_p = data["dev_pd"]
-    cur_b  = cur["bads"];     cur_p = cur["pds"]
-    for yb, yp, label, col in [
-        (dev_b, dev_p, "Development",     "#003366"),
-        (cur_b, cur_p, f"Monitor {sel_month}", "#f97316"),
+    for d, label, colour in [
+        (dev, "Development",    "steelblue"),
+        (cur, sel_period,       "darkorange"),
     ]:
-        try:
-            fpr, tpr, _ = roc_curve(yb, yp)
-            auc = roc_auc_score(yb, yp)
-            gini = 2*auc - 1
-            ax.plot(fpr, tpr, color=col, lw=2.2,
-                    label=f"{label} (AUC={auc:.4f}, Gini={gini:.4f})")
-            ax.fill_between(fpr, tpr, alpha=0.07, color=col)
-        except Exception:
-            pass
-    ax.plot([0,1],[0,1],"k--",lw=1,label="Random (AUC=0.50)")
-    ax.set_xlabel("False Positive Rate"); ax.set_ylabel("True Positive Rate")
-    ax.set_title("ROC Curve — Champion Model", fontweight="bold")
-    ax.legend(fontsize=7.5); ax.grid(alpha=0.3)
-    ax.set_xlim(0,1); ax.set_ylim(0,1)
-    st.pyplot(fig, use_container_width=True); plt.close("all")
+        if d["bads"].sum() > 0:
+            fpr, tpr, _ = roc_curve(d["bads"], d["pds"])
+            ax.plot(fpr, tpr, color=colour, lw=1.8,
+                    label=f"{label} (AUC={d['AUC']:.4f})")
+    ax.plot([0, 1], [0, 1], "k--", lw=1, label="Random")
+    ax.set_xlabel("False Positive Rate")
+    ax.set_ylabel("True Positive Rate")
+    ax.legend(fontsize=8)
+    ax.grid(alpha=0.3)
+    ax.set_xlim(0, 1); ax.set_ylim(0, 1)
+    ax.set_title("ROC Curve Comparison", fontsize=10)
+    plt.tight_layout()
+    st.pyplot(fig, use_container_width=True)
+    plt.close()
 
 st.divider()
 
-# ── Monitoring Summary Table ──────────────────────────────────
-st.markdown("### 📋 Monthly Monitoring Summary")
-summary_rows = []
-for m in mon:
-    p = m["psi"]
-    rag_v = "🟢 Green" if p < psi_amber else ("🟡 Amber" if p < psi_red else "🔴 Red")
-    auc_v = "🟢" if m["auc_roc"] >= 0.75 else ("🟡" if m["auc_roc"] >= 0.70 else "🔴")
-    summary_rows.append({
-        "Period":         m["month"].strftime("%b %Y"),
-        "N":              m["n"],
-        "Mean Score":     f"{m['mean_score']:.0f}",
-        "Default Rate %": f"{m['default_rate']*100:.2f}%",
-        "Expected PD %":  f"{m['expected_pd']*100:.2f}%",
-        "AUC-ROC":        f"{auc_v} {m['auc_roc']:.4f}",
-        "Gini":           f"{m['gini']:.4f}",
-        "PSI":            f"{m['psi']:.4f}",
-        "RAG":            rag_v,
-    })
-st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True,
-             column_config={"Period": st.column_config.TextColumn(width="small"),
-                            "RAG":    st.column_config.TextColumn(width="small")})
+# ── Monthly summary table ──────────────────────────────────────────────────
+st.subheader("Monthly Summary Table")
 
-st.markdown("""
-<div style="background:#f8f9fa;border-radius:8px;padding:10px 14px;
-            font-size:0.74rem;color:#6b7280;margin-top:8px;">
-📋 <strong>OSFI E-23:</strong> PSI ≥ 0.10 triggers amber review. PSI ≥ 0.25 requires model rebuild escalation to CRO.
-AUC below 0.70 requires immediate model redevelopment. All monitoring must be logged in the Model Risk Register.
-</div>""", unsafe_allow_html=True)
+table_rows = []
+for r in data:
+    table_rows.append({
+        "Period":        r["Period"],
+        "N":             r["N"],
+        "Mean Score":    r["Mean_Score"],
+        "Default Rate %":r["Default_Rate"],
+        "Exp PD %":      r["Exp_PD"],
+        "AUC-ROC":       f"{auc_rag(r['AUC'])} {r['AUC']:.4f}",
+        "Gini":          f"{r['Gini']:.4f}",
+        "PSI":           r["PSI"],
+        "RAG":           rag(r["PSI"]),
+    })
+
+st.dataframe(pd.DataFrame(table_rows), use_container_width=True, hide_index=True)
+
+st.caption(
+    "OSFI E-23: PSI ≥ 0.10 → increase monitoring frequency. "
+    "PSI ≥ 0.25 → model rebuild required, escalate to Model Risk / CRO."
+)
