@@ -1,17 +1,8 @@
-# 🏦 BFSI Credit Risk Scorecard Model — Canadian Banking Edition
+# BFSI Credit Risk Scorecard Model — Canadian Banking Edition
 
-> **End-to-end PD/LGD/EAD credit risk platform** mirroring internal model development workflows at RBC, TD, BMO, and Canadian credit unions. Built to OSFI E-23 / IFRS 9 standards.
+## Project Overview
 
-[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![OSFI E-23](https://img.shields.io/badge/Regulatory-OSFI%20E--23-red.svg)]()
-[![IFRS 9](https://img.shields.io/badge/Accounting-IFRS%209-green.svg)]()
-
----
-
-## 📌 Project Overview
-
-This repository implements a **production-grade credit risk scorecard** for the Canadian BFSI sector, covering the full model development lifecycle as practiced at RBC, TD, BMO, and major Canadian credit unions.
+This repository implements a production-grade credit risk scorecard for the Canadian BFSI sector, covering the full model development lifecycle as practiced across major financial institutions and credit unions.
 
 | Phase | Description |
 |-------|-------------|
@@ -27,7 +18,7 @@ This repository implements a **production-grade credit risk scorecard** for the 
 
 ---
 
-## 📂 Dataset
+## Dataset
 
 **Primary:** [Home Equity Loan Default (HMEQ)](https://www.kaggle.com/datasets/ajay1735/hmeq-data)
 
@@ -56,7 +47,7 @@ kaggle datasets download -d ajay1735/hmeq-data -p data/raw/ --unzip
 
 ---
 
-## 🗂️ Repository Structure
+## Repository Structure
 
 ```
 credit-risk-scorecard/
@@ -99,7 +90,7 @@ credit-risk-scorecard/
 
 ---
 
-## ⚡ Quick Start
+## Quick Start
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/credit-risk-scorecard-canada.git
@@ -125,7 +116,7 @@ cd streamlit_app && streamlit run app.py
 
 ---
 
-## 📊 Expected Performance Benchmarks
+## Expected Performance Benchmarks
 
 | Metric | Champion (LR) | Challenger (XGB) | Threshold |
 |--------|---------------|------------------|-----------|
@@ -135,10 +126,6 @@ cd streamlit_app && streamlit run app.py
 
 ---
 
-## 👤 Author
+## Author 
 
-Portfolio project for **Senior Data Analyst — Credit Risk** (4+ yrs Canadian BFSI).
-
-## 📄 License
-
-MIT License
+Kirti Sinha | Data Analyst | Credit Risk Analyst
